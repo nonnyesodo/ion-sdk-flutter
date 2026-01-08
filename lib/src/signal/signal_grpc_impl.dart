@@ -75,30 +75,79 @@ class GRPCWebSignal extends Signal {
     _replyStream.cancel();
   }
 
+  // @override
+  // Future<RTCSessionDescription> join(
+  //     String sid, String uid, RTCSessionDescription offer) {
+  //   Completer completer = Completer<RTCSessionDescription>();
+  //   var request = pb.Request()
+  //     ..join = (pb.JoinRequest()
+  //       ..description = offer.toMap()
+  //       ..sid = sid
+  //       ..uid = uid);
+  //   _requestStream.add(request);
+
+  //   Function(RTCSessionDescription) handler;
+  //   handler = (desc) {
+  //     completer.complete(desc);
+  //   };
+  //   _emitter.once('join-reply', handler);
+  //   return completer.future as Future<RTCSessionDescription>;
+  // }
   @override
   Future<RTCSessionDescription> join(
       String sid, String uid, RTCSessionDescription offer) {
-    Completer completer = Completer<RTCSessionDescription>();
+    var completer = Completer<RTCSessionDescription>();
+
+    // Create the Protobuf SessionDescription object
+    var pbDescription = pb.SessionDescription()
+      ..sdp = offer.sdp!
+      ..type = offer.type!;
+
     var request = pb.Request()
       ..join = (pb.JoinRequest()
-        ..description = offer.toMap()
+        ..description = pbDescription // Use the Proto object, not a Map
         ..sid = sid
         ..uid = uid);
+
     _requestStream.add(request);
 
-    Function(RTCSessionDescription) handler;
-    handler = (desc) {
-      completer.complete(desc);
-    };
-    _emitter.once('join-reply', handler);
-    return completer.future as Future<RTCSessionDescription>;
+    // Note: The reply is likely coming back as a Proto SessionDescription too
+    _emitter.once('join-reply', (dynamic desc) {
+      if (desc is pb.SessionDescription) {
+        completer.complete(RTCSessionDescription(desc.sdp, desc.type));
+      } else {
+        // Fallback for different response types
+        completer.complete(desc as RTCSessionDescription);
+      }
+    });
+
+    return completer.future;
   }
 
+  // @override
+  // Future<RTCSessionDescription> offer(RTCSessionDescription offer) {
+  // Completer completer = Completer<RTCSessionDescription>();
+  // var id = _uuid.v4();
+  //   var request = pb.Request()..description = offer.toMap();
+  // _requestStream.add(request);
+  // Function(String, dynamic) handler;
+  // handler = (respid, desc) {
+  //   if (respid == id) {
+  //     completer.complete(desc);
+  //   }
+  // };
+  // _emitter.once('description', handler);
+  // return completer.future as Future<RTCSessionDescription>;
+  // }
   @override
   Future<RTCSessionDescription> offer(RTCSessionDescription offer) {
     Completer completer = Completer<RTCSessionDescription>();
     var id = _uuid.v4();
-    var request = pb.Request()..description = offer.toMap();
+    var pbDescription = pb.SessionDescription()
+      ..sdp = offer.sdp!
+      ..type = offer.type!;
+
+    var request = pb.Request()..description = pbDescription;
     _requestStream.add(request);
     Function(String, dynamic) handler;
     handler = (respid, desc) {
@@ -112,9 +161,19 @@ class GRPCWebSignal extends Signal {
 
   @override
   void answer(RTCSessionDescription answer) {
-    var reply = pb.Request()..description = answer.toMap();
+    var pbDescription = pb.SessionDescription()
+      ..sdp = answer.sdp!
+      ..type = answer.type!;
+
+    var reply = pb.Request()..description = pbDescription;
     _requestStream.add(reply);
   }
+
+  // @override
+  // void answer(RTCSessionDescription answer) {
+  //   var reply = pb.Request()..description = answer.toMap();
+  //   _requestStream.add(reply);
+  // }
 
   @override
   void trickle(Trickle trickle) {
